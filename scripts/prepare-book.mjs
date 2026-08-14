@@ -278,5 +278,10 @@ const books = [
     contentsFromBoldTitles: true
   })
 ];
-fs.writeFileSync(output, `// Generated from the supplied manuscripts. Do not edit manually.\nexport const books = ${JSON.stringify(books, null, 2)};\nexport const book = books[0];\n`);
+const generatedContent = `// Generated from the supplied manuscripts. Do not edit manually.\nexport const books = ${JSON.stringify(books, null, 2)};\nexport const book = books[0];\n`;
+const existingContent = fs.existsSync(output) ? fs.readFileSync(output, 'utf8') : '';
+// Do not touch the generated module when its contents are unchanged. Rewriting an
+// identical dependency while `next dev` is starting can leave its hot-reload
+// cache holding an out-of-date module reference on Windows.
+if (existingContent !== generatedContent) fs.writeFileSync(output, generatedContent);
 console.log(`Prepared ${books.map((item) => `${item.pages.length} pages: ${item.title}`).join('; ')}.`);
