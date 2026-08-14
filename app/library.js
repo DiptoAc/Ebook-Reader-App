@@ -46,11 +46,6 @@ const frontPageDesigns = [
     description: "পরিচ্ছন্ন, আগের নকশার একক তাক",
   },
   {
-    id: "circular",
-    label: "বইয়ের ক্যারোসেল",
-    description: "স্ক্রল করে ঘুরিয়ে বই দেখার চলমান তাক",
-  },
-  {
     id: "expanding",
     label: "বিস্তৃত ক্যারোসেল",
     description: "মাঝের বইটি বড় হয়ে ওঠে, পাশেরগুলো ছোট হয়ে সরে যায়",
@@ -61,6 +56,9 @@ const frontPageDesigns = [
     description: "Readera-অনুপ্রাণিত পরিচ্ছন্ন বইয়ের তালিকা",
   },
 ];
+
+const DEFAULT_FRONT_PAGE_DESIGN = "bookcase";
+const FRONT_PAGE_DESIGN_STORAGE_KEY = "front-page-design";
 
 function Plant({ small = false }) {
   return (
@@ -136,25 +134,36 @@ function DisplayBook({ entry, className = "", style, onOpen, onUnavailable, save
   );
 }
 
-function ReaderaBookRow({ entry, onOpen, onUnavailable, savedPage }) {
+function ReaderaBookRow({ entry, onOpen, onUnavailable, savedPage, isFavorite, onToggleFavorite }) {
   const isAvailable = Boolean(entry.readable);
   const handleOpen = () =>
     isAvailable
       ? onOpen(entry.id)
       : onUnavailable(`“${entry.title}” এখনও পাঠের জন্য যোগ করা হয়নি`);
   return (
-    <button
+    <article
       className="readera-book-card"
-      onClick={handleOpen}
-      aria-label={isAvailable ? `${entry.title} খুলুন` : `${entry.title} এখনও যোগ করা হয়নি`}
     >
-      <img src={encodeURI(`/sequence/covers/${entry.cover}`)} alt="" />
-      <span className="readera-book-details">
-        <strong>{entry.title}</strong>
-        <small>{isAvailable ? (savedPage > 0 ? `পৃষ্ঠা ${savedPage + 1} থেকে চালিয়ে যান` : "পড়তে ট্যাপ করুন") : "শিগগিরই আসছে"}</small>
-      </span>
-      {!isAvailable && <span className="readera-card-lock" aria-hidden="true">⌁</span>}
-    </button>
+      <button
+        className="readera-book-open"
+        onClick={handleOpen}
+        aria-label={isAvailable ? `${entry.title} খুলুন` : `${entry.title} এখনও যোগ করা হয়নি`}
+      >
+        <img src={encodeURI(`/sequence/covers/${entry.cover}`)} alt="" />
+        <span className="readera-book-details">
+          <strong>{entry.title}</strong>
+          <small>{isAvailable ? (savedPage > 0 ? `পৃষ্ঠা ${savedPage + 1} থেকে চালিয়ে যান` : "পড়তে ট্যাপ করুন") : "শিগগিরই আসছে"}</small>
+        </span>
+        {!isAvailable && <span className="readera-card-lock" aria-hidden="true">⌁</span>}
+      </button>
+      <button
+        className={`readera-favorite${isFavorite ? " is-favorite" : ""}`}
+        onClick={() => onToggleFavorite(entry.id ?? entry.title)}
+        aria-label={isFavorite ? `${entry.title} পছন্দের তালিকা থেকে সরান` : `${entry.title} পছন্দের তালিকায় যোগ করুন`}
+      >
+        {isFavorite ? "★" : "☆"}
+      </button>
+    </article>
   );
 }
 
@@ -211,7 +220,7 @@ export default function Library() {
   const [page, setPage] = useState(0);
   const [direction, setDirection] = useState("next");
   const [bookmarks, setBookmarks] = useState({});
-  const [frontPageDesign, setFrontPageDesign] = useState("circular");
+  const [frontPageDesign, setFrontPageDesign] = useState(DEFAULT_FRONT_PAGE_DESIGN);
   const [showSettings, setShowSettings] = useState(false);
   const [carouselRotation, setCarouselRotation] = useState(0);
   const carouselTouchStart = useRef(null);
@@ -223,6 +232,10 @@ export default function Library() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedQuery, setHighlightedQuery] = useState("");
+  const [readeraSearch, setReaderaSearch] = useState("");
+  const [readeraView, setReaderaView] = useState("all");
+  const [favoriteBooks, setFavoriteBooks] = useState({});
+  const [startedBooks, setStartedBooks] = useState({});
   const activeBook =
     books.find((item) => item.id === activeBookId) ?? defaultBook;
   // Every book, including the replacement edition of প্রেম ও অন্যান্য কবিতা,
@@ -239,6 +252,17 @@ export default function Library() {
     detectedContentsPage,
   ];
   const contentsPage = contentsPageIndexes[0] ?? detectedContentsPage;
+  const normalizedReaderaSearch = normalizeForSearch(readeraSearch);
+  const readeraVisibleBooks = libraryBooks.filter((entry) => {
+    const bookKey = entry.id ?? entry.title;
+    const matchesSearch = !normalizedReaderaSearch || normalizeForSearch(entry.title).includes(normalizedReaderaSearch);
+    const matchesView =
+      readeraView === "all" ||
+      (readeraView === "reading" && Boolean(entry.id && startedBooks[entry.id])) ||
+      (readeraView === "favorites" && Boolean(favoriteBooks[bookKey]));
+    return matchesSearch && matchesView;
+  });
+  const readeraViewLabels = { all: "সব বই", reading: "পড়ছি", favorites: "পছন্দের" };
   const currentPageBlocks = activeBook.pages[page] ?? [];
   const currentPageDensity = currentPageBlocks.reduce(
     (total, block) =>
@@ -293,9 +317,20 @@ export default function Library() {
       ]),
     );
     setBookmarks(storedBookmarks);
-    const savedDesign = localStorage.getItem("front-page-design");
-    if (savedDesign === "zigzag") localStorage.setItem("front-page-design", "bookcase");
-    setFrontPageDesign(savedDesign === "zigzag" ? "bookcase" : savedDesign || "circular");
+    try {
+      setFavoriteBooks(JSON.parse(localStorage.getItem("favorite-books") || "{}"));
+      setStartedBooks(JSON.parse(localStorage.getItem("started-books") || "{}"));
+    } catch {
+      setFavoriteBooks({});
+      setStartedBooks({});
+    }
+    const savedDesign = localStorage.getItem(FRONT_PAGE_DESIGN_STORAGE_KEY);
+    const normalizedDesign = savedDesign === "zigzag" ? "bookcase" : savedDesign;
+    const isKnownDesign = frontPageDesigns.some((item) => item.id === normalizedDesign);
+    const openingDesign = isKnownDesign ? normalizedDesign : DEFAULT_FRONT_PAGE_DESIGN;
+    // A fresh browser gets the bookcase; later visits restore the user's last choice.
+    localStorage.setItem(FRONT_PAGE_DESIGN_STORAGE_KEY, openingDesign);
+    setFrontPageDesign(openingDesign);
   }, []);
 
   function saveBookmark(bookId, bookmarkPage) {
@@ -303,9 +338,21 @@ export default function Library() {
     localStorage.setItem(`bookmark-${bookId}`, String(bookmarkPage));
   }
 
+  function toggleFavorite(bookKey) {
+    setFavoriteBooks((current) => {
+      const next = { ...current, [bookKey]: !current[bookKey] };
+      localStorage.setItem("favorite-books", JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function setReaderaLibraryView(view) {
+    setReaderaView(view);
+  }
+
   function chooseFrontPageDesign(design) {
     setFrontPageDesign(design);
-    localStorage.setItem("front-page-design", design);
+    localStorage.setItem(FRONT_PAGE_DESIGN_STORAGE_KEY, design);
     setShowSettings(false);
   }
 
@@ -497,6 +544,11 @@ export default function Library() {
     setSearchOpen(false);
     setSearchQuery("");
     setHighlightedQuery("");
+    setStartedBooks((current) => {
+      const next = { ...current, [selectedBook.id]: true };
+      localStorage.setItem("started-books", JSON.stringify(next));
+      return next;
+    });
     setIsReading(true);
   }
 
@@ -780,7 +832,13 @@ export default function Library() {
       ) : frontPageDesign === "readera" ? (
         <section className="readera-library" aria-label="বইয়ের তালিকা">
           <div className="readera-toolbar">
-            <button className="readera-icon-button" aria-label="মেনু">☰</button>
+            <button
+              className="readera-icon-button"
+              onClick={() => { setReaderaSearch(""); setReaderaLibraryView("all"); }}
+              aria-label="সব বই দেখান"
+            >
+              ☰
+            </button>
             <strong>পাঠাগার</strong>
             <button
               className="readera-icon-button"
@@ -791,45 +849,58 @@ export default function Library() {
             </button>
           </div>
           <div className="readera-library-heading">
-            <div><p>আমার সংগ্রহ</p><h2>সব বই</h2></div>
-            <span>{libraryBooks.length}টি বই</span>
+            <div><p>আমার সংগ্রহ</p><h2>{readeraViewLabels[readeraView]}</h2></div>
+            <span>{readeraVisibleBooks.length}টি বই</span>
           </div>
-          <button className="readera-search" aria-label="বই খুঁজুন">
+          <label className="readera-search">
             <span aria-hidden="true">⌕</span> বই খুঁজুন
-          </button>
+            <input
+              value={readeraSearch}
+              onChange={(event) => setReaderaSearch(event.target.value)}
+              placeholder="নাম লিখুন"
+              aria-label="বই খুঁজুন"
+            />
+            {readeraSearch && <button onClick={() => setReaderaSearch("")} aria-label="Search মুছুন">×</button>}
+          </label>
           <nav className="readera-tabs" aria-label="বইয়ের ধরন">
-            <span className="active">সব</span>
-            <span>পড়ছি</span>
-            <span>পছন্দের</span>
+            <button className={readeraView === "all" ? "active" : ""} onClick={() => setReaderaLibraryView("all")}>সব</button>
+            <button className={readeraView === "reading" ? "active" : ""} onClick={() => setReaderaLibraryView("reading")}>পড়ছি</button>
+            <button className={readeraView === "favorites" ? "active" : ""} onClick={() => setReaderaLibraryView("favorites")}>পছন্দের</button>
           </nav>
           <div className="readera-list">
-            {libraryBooks.map((entry) => (
+            {readeraVisibleBooks.length ? readeraVisibleBooks.map((entry) => (
               <ReaderaBookRow
                 key={entry.title}
                 entry={entry}
                 onOpen={openBook}
                 onUnavailable={showLibraryNotice}
                 savedPage={bookmarks[entry.id] ?? 0}
+                isFavorite={Boolean(favoriteBooks[entry.id ?? entry.title])}
+                onToggleFavorite={toggleFavorite}
               />
-            ))}
-            <button
-              className="readera-empty-card"
-              onClick={() => showLibraryNotice("এই জায়গার বইটি এখনও যোগ করা হয়নি")}
-            >
-              <span>＋</span> নতুন বই শিগগিরই যোগ হবে
-            </button>
-            <button
-              className="readera-empty-card"
-              onClick={() => showLibraryNotice("এই জায়গার বইটি এখনও যোগ করা হয়নি")}
-            >
-              <span>＋</span> নতুন বই শিগগিরই যোগ হবে
-            </button>
+            )) : (
+              <p className="readera-no-results">কোনো বই পাওয়া যায়নি</p>
+            )}
+            {readeraView === "all" && !normalizedReaderaSearch && <>
+              <button
+                className="readera-empty-card"
+                onClick={() => showLibraryNotice("এই জায়গার বইটি এখনও যোগ করা হয়নি")}
+              >
+                <span>＋</span> নতুন বই শিগগিরই যোগ হবে
+              </button>
+              <button
+                className="readera-empty-card"
+                onClick={() => showLibraryNotice("এই জায়গার বইটি এখনও যোগ করা হয়নি")}
+              >
+                <span>＋</span> নতুন বই শিগগিরই যোগ হবে
+              </button>
+            </>}
           </div>
           <nav className="readera-bottom-nav" aria-label="পাঠাগার নেভিগেশন">
-            <span className="active"><b>▣</b>বই</span>
-            <span><b>◷</b>পড়ছি</span>
-            <span><b>♡</b>পছন্দের</span>
-            <span><b>☷</b>তালিকা</span>
+            <button className={readeraView === "all" ? "active" : ""} onClick={() => setReaderaLibraryView("all")}><b>▣</b>বই</button>
+            <button className={readeraView === "reading" ? "active" : ""} onClick={() => setReaderaLibraryView("reading")}><b>◷</b>পড়ছি</button>
+            <button className={readeraView === "favorites" ? "active" : ""} onClick={() => setReaderaLibraryView("favorites")}><b>♡</b>পছন্দের</button>
+            <button onClick={() => { setReaderaSearch(""); setReaderaLibraryView("all"); }}><b>☷</b>তালিকা</button>
           </nav>
         </section>
       ) : frontPageDesign === "expanding" ? (

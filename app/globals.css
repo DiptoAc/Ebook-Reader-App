@@ -446,6 +446,118 @@ button.future-book-slot { cursor: pointer; }
   .readera-search { width: min(520px, calc(100% - max(10vw, 72px))); margin-left: max(5vw, 36px); }
 }
 
+/* Interactive controls in the full-screen library view. */
+.readera-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .42rem;
+}
+.readera-search > span { margin: 0; }
+.readera-search input {
+  min-width: 0;
+  padding: .18rem 0;
+  border: 0;
+  outline: 0;
+  color: #4c2815;
+  background: transparent;
+  font: inherit;
+  font-size: .8rem;
+}
+.readera-search input::placeholder { color: #9c7858; }
+.readera-search > button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #80502c;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1.12rem;
+}
+.readera-search > button:hover,
+.readera-search > button:focus-visible { background: rgba(132, 70, 30, .12); outline: none; }
+.readera-tabs button {
+  position: relative;
+  padding: .58rem .08rem .68rem;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: inherit;
+}
+.readera-tabs button.active { color: #6d3216; font-weight: 700; }
+.readera-tabs button.active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: #9b4a22;
+}
+.readera-book-card { display: block; }
+.readera-book-open {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(40px, auto);
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: #492512;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.readera-book-open img { width: 100%; aspect-ratio: 2 / 3; height: auto; border-radius: 4px; object-fit: cover; }
+.readera-book-open:hover img,
+.readera-book-open:focus-visible img { transform: translateY(-4px); box-shadow: 0 11px 16px rgba(58,22,7,.31), -3px 0 0 rgba(71,25,7,.25); }
+.readera-book-open:focus-visible { outline: 2px solid #9b4a22; outline-offset: 4px; }
+.readera-favorite {
+  position: absolute;
+  right: 6px;
+  bottom: 40px;
+  z-index: 2;
+  width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #fff4d3;
+  background: rgba(70, 27, 9, .72);
+  box-shadow: 0 2px 5px rgba(44, 15, 4, .28);
+  cursor: pointer;
+  font-size: 1.12rem;
+  line-height: 1;
+}
+.readera-favorite.is-favorite { color: #ffd66c; }
+.readera-favorite:hover,
+.readera-favorite:focus-visible { background: #7b3618; outline: 2px solid #e9be6d; outline-offset: 2px; }
+.readera-no-results { grid-column: 1 / -1; margin: 2.4rem 0; color: #896342; text-align: center; font-size: .83rem; }
+.readera-bottom-nav button {
+  display: grid;
+  justify-items: center;
+  gap: .18rem;
+  padding: 0;
+  border: 0;
+  color: #876449;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: .58rem;
+}
+.readera-bottom-nav button b { color: currentColor; font-size: 1.08rem; font-weight: 400; }
+.readera-bottom-nav button.active { color: #8f401b; }
+.readera-bottom-nav button:focus-visible { outline: 2px solid #9b4a22; outline-offset: 2px; }
+
 /* In-book, offline full-text search. */
 .reader-search-button { display: inline-flex; align-items: center; gap: .28rem; }
 .reader-search-overlay {
