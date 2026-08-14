@@ -300,6 +300,7 @@ export default function Library() {
   const carouselTouchStart = useRef(null);
   const [expandingIndex, setExpandingIndex] = useState(0);
   const expandingTouchStart = useRef(null);
+  const readerTouchStart = useRef(null);
   const [selectionMenu, setSelectionMenu] = useState(null);
   const [shareStatus, setShareStatus] = useState("");
   const [libraryNotice, setLibraryNotice] = useState("");
@@ -366,11 +367,10 @@ export default function Library() {
         : "";
   const mobileReadingSize =
     isProseReading
-      ? currentPageCharacters > 620
-        ? "mobile-reading-dense"
-        : currentPageCharacters > 450
-          ? "mobile-reading-compact"
-          : "mobile-reading-comfort"
+      // Prose pages are measured in the browser at the standard mobile type
+      // size. Keeping that same size when rendering prevents prematurely
+      // short pages (and the large empty area they caused on phones).
+      ? "mobile-reading-comfort"
       : currentPageDensity > 20 || currentPageCharacters > 950
         ? "mobile-reading-dense"
         : currentPageDensity > 15 || currentPageCharacters > 690
@@ -552,6 +552,35 @@ export default function Library() {
     if (startX === null || endX === undefined || Math.abs(endX - startX) < 30)
       return;
     moveExpandingCarousel(endX < startX ? 1 : -1);
+  }
+
+  function startReaderSwipe(event) {
+    if (
+      event.target instanceof Element &&
+      event.target.closest("button, input, textarea, select, a")
+    ) {
+      readerTouchStart.current = null;
+      return;
+    }
+    const touch = event.touches[0];
+    if (!touch) return;
+    readerTouchStart.current = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function endReaderSwipe(event) {
+    const start = readerTouchStart.current;
+    readerTouchStart.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+
+    const horizontalDistance = touch.clientX - start.x;
+    const verticalDistance = touch.clientY - start.y;
+    const isHorizontalSwipe =
+      Math.abs(horizontalDistance) >= 52 &&
+      Math.abs(horizontalDistance) > Math.abs(verticalDistance);
+    if (!isHorizontalSwipe || window.getSelection()?.toString().trim()) return;
+
+    move(horizontalDistance < 0 ? page + 1 : page - 1);
   }
 
   function captureSelection() {
@@ -817,6 +846,11 @@ export default function Library() {
         <section
           className="open-book"
           aria-label={`${activeBook.title} পড়া হচ্ছে`}
+          onTouchStart={startReaderSwipe}
+          onTouchEnd={endReaderSwipe}
+          onTouchCancel={() => {
+            readerTouchStart.current = null;
+          }}
         >
           <div className="bookmark">চিহ্নিত</div>
           <article
@@ -918,7 +952,7 @@ export default function Library() {
     <main className={`library-shell front-design-${frontPageDesign}`}>
       <header className="library-header">
         <p>এনেছি রঙের নহর</p>
-        <h1>আমার বই</h1>
+        <h1>প্রণব আচার্য্য</h1>
         <span>একটি বই বেছে নিয়ে পড়া শুরু করুন</span>
       </header>
       <button

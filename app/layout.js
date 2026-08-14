@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "আমার বই",
+  title: "প্রণব আচার্য্য",
   description: "একটি আরামদায়ক ডিজিটাল পাঠাগার",
 };
 

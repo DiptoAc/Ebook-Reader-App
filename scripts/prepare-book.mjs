@@ -258,8 +258,6 @@ function makeBheraOpeningPages(blocks) {
     [
       { ...dedication, text: dedicationHeading, isTitle: true, openingRole: 'dedication-heading' },
       { ...dedication, text: dedicationCopy.join(' ').trim(), isTitle: false, openingRole: 'dedication-copy' },
-    ],
-    [
       { ...introductionOne, isTitle: false, openingRole: 'intro-copy' },
       { ...introductionTwo, isTitle: false, openingRole: 'intro-copy' },
       { ...signature, isTitle: false, openingRole: 'signature' },
