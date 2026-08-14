@@ -728,8 +728,15 @@ button.future-book-slot { cursor: pointer; }
 @media (max-width: 560px) {
   .reader-search-button span { display: none; }
   .reader-search-button { min-width: 34px; justify-content: center; padding-inline: .45rem !important; font-size: 1.1rem !important; }
-  .reader-search-overlay { align-items: end; padding: .5rem; }
-  .reader-search-panel { max-height: min(86svh, 760px); border-radius: 14px 14px 9px 9px; }
+  .reader-search-overlay {
+    align-items: start;
+    padding: calc(env(safe-area-inset-top) + .55rem) .5rem .5rem;
+  }
+  .reader-search-panel {
+    width: 100%;
+    max-height: min(48svh, 430px);
+    border-radius: 9px 9px 14px 14px;
+  }
   .reader-search-heading { padding: 1rem .95rem .7rem; }
   .reader-search-input { margin-inline: .85rem; }
   .reader-search-results { padding-inline: .5rem; }
@@ -816,6 +823,70 @@ button.future-book-slot { cursor: pointer; }
   scroll-snap-type: x mandatory;
   scrollbar-color: #d08a47 #351408;
   scrollbar-width: thin;
+}
+
+/* Reader appearance controls. Border variants are painted as an overlay so
+   their width never changes the text column or the prepared poem pagination. */
+.reader-topbar { position: relative; }
+.reader-appearance-panel {
+  position: absolute;
+  z-index: 1100;
+  top: calc(100% + .35rem);
+  right: 0;
+  width: min(92vw, 310px);
+  padding: .85rem;
+  border: 1px solid #d6ad70;
+  border-radius: 12px;
+  color: #43200e;
+  background: #fff5df;
+  box-shadow: 0 12px 26px rgba(22, 6, 1, .46);
+}
+.reader-appearance-panel > div { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .65rem; }
+.reader-appearance-panel h2 { margin: 0; font-size: .92rem; }
+.reader-appearance-panel > div button { width: 28px; height: 28px; border: 0; border-radius: 50%; color: #632b14; background: transparent; cursor: pointer; font-size: 1.25rem; line-height: 1; }
+.reader-appearance-panel fieldset { display: flex; flex-wrap: wrap; gap: .35rem; margin: .7rem 0 0; padding: .58rem 0 0; border: 0; border-top: 1px solid rgba(151, 88, 40, .25); }
+.reader-appearance-panel legend { width: 100%; margin-bottom: .2rem; color: #80502e; font-size: .7rem; }
+.reader-appearance-panel fieldset button { border: 1px solid #c89b65; border-radius: 99px; padding: .32rem .56rem; color: #582b15; background: #fffcf4; cursor: pointer; font: inherit; font-size: .72rem; }
+.reader-appearance-panel fieldset button.selected { border-color: #813818; color: #fff6df; background: #813818; }
+.paper-page:not(.rendered-doc-page) { --visible-page-border: 11px; --visible-page-border-color: linear-gradient(#c9ae87, #a88461 50%, #d9c29d); }
+.paper-page:not(.rendered-doc-page)::before { content: ""; position: absolute; z-index: 0; top: 0; bottom: 0; left: 0; width: var(--visible-page-border); pointer-events: none; background: var(--visible-page-border-color); box-shadow: inset -2px 0 4px rgba(64, 39, 22, .2); }
+.paper-page:not(.rendered-doc-page) > * { position: relative; z-index: 1; }
+.paper-page:not(.rendered-doc-page) > .page-number { position: absolute; z-index: 1; }
+.paper-page:not(.rendered-doc-page) > .page-curl { position: absolute; z-index: 3; }
+.paper-page:not(.rendered-doc-page) {
+  --visible-page-border: 0px;
+  --reader-page-side-padding: clamp(1.35rem, 8vw, 4.2rem);
+  border-left: 0;
+  padding-left: var(--reader-page-side-padding);
+  padding-right: var(--reader-page-side-padding);
+  box-shadow: none;
+}
+.paper-page.reader-margin-narrow { --reader-page-side-padding: max(1.1rem, calc(clamp(1.35rem, 8vw, 4.2rem) - .35rem)); }
+.paper-page.reader-margin-normal { --reader-page-side-padding: clamp(1.35rem, 8vw, 4.2rem); }
+.paper-page.reader-margin-wide { --reader-page-side-padding: calc(clamp(1.35rem, 8vw, 4.2rem) + .35rem); }
+.paper-page.reader-theme-night { --visible-page-border-color: linear-gradient(#5b493f, #302820 50%, #786657); color: #eee4d3; background: linear-gradient(105deg, #3c342d 0%, #201c18 12%, #2b251f 100%); box-shadow: inset 16px 0 20px rgba(0, 0, 0, .32); }
+.paper-page.reader-theme-night .page-head { color: #c8bba6; border-color: #766858; }
+.paper-page.reader-theme-night .page-number { color: #c8bba6; }
+.paper-page.reader-theme-night .poem-title { color: #ffe0a1; border-color: rgba(255, 224, 161, .28); }
+.paper-page.reader-theme-night .contents-list button { color: #eee4d3; border-color: #766858; }
+.paper-page.reader-theme-night .contents-list button span:last-child { color: #dbc398; }
+.paper-page.reader-theme-night .contents-list button:hover,
+.paper-page.reader-theme-night .contents-list button:focus-visible { color: #ffe2a8; background: rgba(255, 213, 140, .12); }
+.paper-page.reader-theme-night .page-copy mark { color: #2d2010; background: #f1c95a; }
+.paper-page.reader-theme-night .curl-under { background: linear-gradient(135deg, #372f29, #66594e 48%, #423830); box-shadow: inset 4px 4px 7px rgba(0, 0, 0, .38); }
+.paper-page.reader-theme-night .curl-shadow { background: linear-gradient(135deg, transparent 40%, rgba(0, 0, 0, .7) 54%, transparent 60%); }
+.paper-page.reader-theme-night .curl-fold { background: radial-gradient(ellipse at 100% 100%, #171411 0%, #352d28 28%, #50443a 61%, #6a5b4d 80%); box-shadow: -4px -5px 8px rgba(0, 0, 0, .48), inset 1px 1px 2px rgba(239, 224, 197, .16); }
+.paper-page.reader-theme-night .curl-fold::before { border-color: rgba(231, 212, 181, .2); box-shadow: 0 -2px 3px rgba(255, 246, 222, .12); }
+.paper-page.reader-theme-night .curl-sheen { background: linear-gradient(155deg, transparent 40%, rgba(255, 243, 216, .18) 52%, transparent 65%); }
+
+@media (max-width: 560px) {
+  .reader-appearance-button span { display: none; }
+  .reader-appearance-button { min-width: 34px; justify-content: center; padding-inline: .45rem !important; font-size: 1.05rem !important; }
+  .reader-appearance-panel { top: calc(100% + .2rem); right: .25rem; }
+  .paper-page:not(.rendered-doc-page) { --reader-page-side-padding: 5vw; padding-left: var(--reader-page-side-padding); padding-right: var(--reader-page-side-padding); }
+  .paper-page.reader-margin-narrow { --reader-page-side-padding: 4vw; }
+  .paper-page.reader-margin-normal { --reader-page-side-padding: 5vw; }
+  .paper-page.reader-margin-wide { --reader-page-side-padding: 6vw; }
 }
 .classic-scroll-track {
   display: flex;

@@ -214,10 +214,10 @@ function HighlightedText({ text, query }) {
   );
 }
 
-function paginateProseForViewport(flowBlocks, bookTitle) {
+function paginateProseForViewport(flowBlocks, bookTitle, pageMargin) {
   const paper = document.createElement("article");
   const isPhone = window.matchMedia("(max-width: 560px)").matches;
-  paper.className = "paper-page prose-reading prose-measure-page";
+  paper.className = `paper-page prose-reading prose-measure-page reader-margin-${pageMargin}`;
   paper.style.width = `${isPhone ? window.innerWidth : Math.min(620, window.innerWidth)}px`;
   paper.style.height = `${isPhone
     ? Math.max(420, window.innerHeight - 50)
@@ -305,6 +305,9 @@ export default function Library() {
   const [shareStatus, setShareStatus] = useState("");
   const [libraryNotice, setLibraryNotice] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [readerTheme, setReaderTheme] = useState("day");
+  const [pageMargin, setPageMargin] = useState("normal");
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedQuery, setHighlightedQuery] = useState("");
   const [readeraSearch, setReaderaSearch] = useState("");
@@ -428,6 +431,14 @@ export default function Library() {
     // A fresh browser gets the bookcase; later visits restore the user's last choice.
     localStorage.setItem(FRONT_PAGE_DESIGN_STORAGE_KEY, openingDesign);
     setFrontPageDesign(openingDesign);
+    const savedReaderTheme = localStorage.getItem("reader-page-theme");
+    const savedPageMargin = localStorage.getItem("reader-page-margin");
+    if (savedReaderTheme === "night" || savedReaderTheme === "day") {
+      setReaderTheme(savedReaderTheme);
+    }
+    if (["narrow", "normal", "wide"].includes(savedPageMargin)) {
+      setPageMargin(savedPageMargin);
+    }
   }, []);
 
   useEffect(() => {
@@ -440,7 +451,7 @@ export default function Library() {
     const repaginate = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const prosePages = paginateProseForViewport(activeBook.flowBlocks, activeBook.title);
+        const prosePages = paginateProseForViewport(activeBook.flowBlocks, activeBook.title, pageMargin);
         if (cancelled || !prosePages.length) return;
         const openingPages = activeBook.openingPages ?? [];
         const firstSectionPage = prosePages.findIndex((blocks) =>
@@ -479,7 +490,7 @@ export default function Library() {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", repaginate);
     };
-  }, [isReading, activeBook]);
+  }, [isReading, activeBook, pageMargin]);
 
   useEffect(() => {
     if (page >= readerPageCount) setPage(Math.max(0, readerPageCount - 1));
@@ -745,7 +756,18 @@ export default function Library() {
     setSearchOpen(false);
     setSearchQuery("");
     setHighlightedQuery("");
+    setAppearanceOpen(false);
     setIsReading(false);
+  }
+
+  function chooseReaderTheme(theme) {
+    setReaderTheme(theme);
+    localStorage.setItem("reader-page-theme", theme);
+  }
+
+  function choosePageMargin(margin) {
+    setPageMargin(margin);
+    localStorage.setItem("reader-page-margin", margin);
   }
 
   function openSearchResult(result) {
@@ -773,6 +795,15 @@ export default function Library() {
             >
               ⌕ <span>খুঁজুন</span>
             </button>
+            <button
+              className="reader-appearance-button"
+              onClick={() => setAppearanceOpen((open) => !open)}
+              aria-expanded={appearanceOpen}
+              aria-controls="reader-appearance-settings"
+              aria-label="পড়ার রং ও পৃষ্ঠার margin বদলান"
+            >
+              ◐ <span>সাজ</span>
+            </button>
             <button onClick={() => move(0)} disabled={page === 0}>
               প্রথম পাতা
             </button>
@@ -783,6 +814,33 @@ export default function Library() {
               সূচিপত্র
             </button>
           </div>
+          {appearanceOpen && (
+            <section
+              id="reader-appearance-settings"
+              className="reader-appearance-panel"
+              aria-label="পড়ার সাজসজ্জা"
+            >
+              <div>
+                <h2>পৃষ্ঠার সাজ</h2>
+                <button onClick={() => setAppearanceOpen(false)} aria-label="সাজসজ্জা বন্ধ করুন">×</button>
+              </div>
+              <fieldset>
+                <legend>পৃষ্ঠা রং</legend>
+                <button className={readerTheme === "day" ? "selected" : ""} onClick={() => chooseReaderTheme("day")}>দিন</button>
+                <button className={readerTheme === "night" ? "selected" : ""} onClick={() => chooseReaderTheme("night")}>রাত</button>
+              </fieldset>
+              <fieldset>
+                <legend>পাতার পাশের ফাঁকা জায়গা</legend>
+                {[
+                  ["narrow", "কম"],
+                  ["normal", "স্বাভাবিক"],
+                  ["wide", "বেশি"],
+                ].map(([value, label]) => (
+                  <button key={value} className={pageMargin === value ? "selected" : ""} onClick={() => choosePageMargin(value)}>{label}</button>
+                ))}
+              </fieldset>
+            </section>
+          )}
         </div>
         {searchOpen && (
           <div className="reader-search-overlay" role="dialog" aria-modal="true" aria-label="বইয়ের ভেতরে খুঁজুন">
@@ -855,7 +913,7 @@ export default function Library() {
           <div className="bookmark">চিহ্নিত</div>
           <article
             key={page}
-            className={`paper-page ${direction} ${mobileReadingSize}${isProseReading ? " prose-reading" : ""}${openingPageKind ? ` ${openingPageKind}` : ""}${!usesWordRenderedPages && (readerPages[page]?.length ?? 0) > 25 ? " dense-page" : ""}${usesWordRenderedPages ? " rendered-doc-page" : ""}`}
+            className={`paper-page ${direction} ${mobileReadingSize} reader-theme-${readerTheme} reader-margin-${pageMargin}${isProseReading ? " prose-reading" : ""}${openingPageKind ? ` ${openingPageKind}` : ""}${!usesWordRenderedPages && (readerPages[page]?.length ?? 0) > 25 ? " dense-page" : ""}${usesWordRenderedPages ? " rendered-doc-page" : ""}`}
           >
             {!usesWordRenderedPages && (
               <div className="page-head">
