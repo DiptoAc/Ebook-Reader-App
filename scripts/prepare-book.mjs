@@ -48,7 +48,7 @@ function textFromXml(fragment, convertText = (value) => value) {
   return text ? convertText(text) : text;
 }
 
-function extractWordPages(xml, convertText, ignorePageBreaks = false) {
+function extractWordPages(xml, convertText, ignorePageBreaks = false, preserveParagraphs = false) {
   const pages = [[]];
   // A reformatted manuscript has its stale Word cache removed; other files
   // still use Word's recorded page boundaries.
@@ -83,7 +83,18 @@ function extractWordPages(xml, convertText, ignorePageBreaks = false) {
         flushStanza();
         pages.at(-1).push({ text, alignment, isTitle: true, sourceParagraphIndex: currentParagraphIndex });
       } else if (text) {
-        stanza.push({ text, alignment, sourceParagraphIndex: currentParagraphIndex });
+        if (preserveParagraphs) {
+          // A prose manuscript uses Word paragraphs as its reading rhythm;
+          // manual Word line breaks should reflow naturally on small screens.
+          pages.at(-1).push({
+            text: text.replace(/\s*\n\s*/g, ' '),
+            alignment,
+            isTitle: false,
+            sourceParagraphIndex: currentParagraphIndex,
+          });
+        } else {
+          stanza.push({ text, alignment, sourceParagraphIndex: currentParagraphIndex });
+        }
       } else {
         flushStanza();
       }
@@ -100,9 +111,9 @@ function extractWordPages(xml, convertText, ignorePageBreaks = false) {
 const normalizeTitle = (value) => value.replace(/^[০-৯]+\.\s*/, '').replace(/\s+/g, ' ').trim();
 const titleAliases = { 'পদছাপ': 'পদচ্ছাপ' };
 
-function docxPages(filename, ignorePageBreaks = false) {
+function docxPages(filename, ignorePageBreaks = false, preserveParagraphs = false) {
   const xml = readZipEntry(fs.readFileSync(filename), 'word/document.xml').toString('utf8');
-  return extractWordPages(xml, undefined, ignorePageBreaks);
+  return extractWordPages(xml, undefined, ignorePageBreaks, preserveParagraphs);
 }
 
 function splitPagesAtPoemTitles(pages, poemTitles) {
@@ -182,8 +193,83 @@ function limitPageLines(pages, maximumLines) {
   return result;
 }
 
-function makeBook({ id, title, source, withContents = false, poemTitles = [], contentsBeforeFirstPoem = false, contentsFromBoldTitles = false, maximumLinesPerPage = 0, poemTitleStartParagraph = 0, repaginatePoems = false }) {
-  const rawPages = docxPages(source, repaginatePoems);
+function splitProseText(text, maximumCharacters) {
+  const words = text.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const pieces = [];
+  let piece = '';
+  words.forEach((word) => {
+    const next = piece ? `${piece} ${word}` : word;
+    if (piece && next.length > maximumCharacters) {
+      pieces.push(piece);
+      piece = word;
+    } else {
+      piece = next;
+    }
+  });
+  if (piece) pieces.push(piece);
+  return pieces;
+}
+
+function paginateProse(pages, maximumCharacters) {
+  const result = [];
+  pages.forEach((sourcePage) => {
+    let current = [];
+    let characterCount = 0;
+    const flush = () => {
+      if (current.length) result.push(current);
+      current = [];
+      characterCount = 0;
+    };
+    sourcePage.forEach((block) => {
+      if (block.isTitle) {
+        flush();
+        current.push({ ...block, isTitle: true });
+        characterCount = 58;
+        return;
+      }
+      const chunks = splitProseText(block.text, Math.max(180, maximumCharacters - characterCount));
+      chunks.forEach((chunk, index) => {
+        if (characterCount && characterCount + chunk.length > maximumCharacters) flush();
+        current.push({ ...block, text: chunk, isTitle: false, proseContinuation: index > 0 });
+        characterCount += chunk.length + 24;
+      });
+    });
+    flush();
+  });
+  return result;
+}
+
+function makeBheraOpeningPages(blocks) {
+  const bySourceIndex = new Map(blocks.map((block) => [block.sourceParagraphIndex, block]));
+  const title = bySourceIndex.get(0);
+  const author = bySourceIndex.get(1);
+  const dedication = bySourceIndex.get(18);
+  const introductionOne = bySourceIndex.get(24);
+  const introductionTwo = bySourceIndex.get(26);
+  const signature = bySourceIndex.get(28);
+  const location = bySourceIndex.get(29);
+  if (!title || !author || !dedication || !introductionOne || !introductionTwo || !signature || !location) return [];
+  const [dedicationHeading, ...dedicationCopy] = dedication.text.split(/\n+/).filter(Boolean);
+  return [
+    [
+      { ...title, isTitle: true, openingRole: 'book-title' },
+      { ...author, isTitle: false, openingRole: 'book-author' },
+    ],
+    [
+      { ...dedication, text: dedicationHeading, isTitle: true, openingRole: 'dedication-heading' },
+      { ...dedication, text: dedicationCopy.join(' ').trim(), isTitle: false, openingRole: 'dedication-copy' },
+    ],
+    [
+      { ...introductionOne, isTitle: false, openingRole: 'intro-copy' },
+      { ...introductionTwo, isTitle: false, openingRole: 'intro-copy' },
+      { ...signature, isTitle: false, openingRole: 'signature' },
+      { ...location, isTitle: false, openingRole: 'location' },
+    ],
+  ];
+}
+
+function makeBook({ id, title, source, withContents = false, poemTitles = [], contentsBeforeFirstPoem = false, contentsFromBoldTitles = false, maximumLinesPerPage = 0, maximumCharactersPerPage = 0, poemTitleStartParagraph = 0, repaginatePoems = false, preserveParagraphs = false, readingStyle = 'poetry', openingPageBuilder = null }) {
+  const rawPages = docxPages(source, repaginatePoems, preserveParagraphs);
   // For books with a curated poem list, front-matter can also be bold. Only
   // the known poem names should become page titles in the reader.
   const knownPoemTitles = new Set(poemTitles.map(normalizeTitle));
@@ -195,14 +281,22 @@ function makeBook({ id, title, source, withContents = false, poemTitles = [], co
         knownPoemTitles.has(normalizeTitle(block.text.split('\n')[0])),
     })))
     : rawPages;
+  const openingPages = openingPageBuilder ? openingPageBuilder(sourcePages.flat()) : [];
+  const readingSourcePages = openingPages.length
+    ? sourcePages.map((sourcePage) => sourcePage.filter((block) => block.sourceParagraphIndex >= poemTitleStartParagraph)).filter((sourcePage) => sourcePage.length)
+    : sourcePages;
   const detectedPoemTitles = contentsFromBoldTitles
     ? sourcePages
       .flatMap((page) => page.filter((block) => block.isTitle).map((block) => normalizeTitle(block.text)))
       .filter((item, index, all) => item && item !== normalizeTitle(title) && all.indexOf(item) === index)
     : [];
   const effectivePoemTitles = poemTitles.length ? poemTitles : detectedPoemTitles;
-  const titleSplitPages = effectivePoemTitles.length ? splitPagesAtPoemTitles(sourcePages, effectivePoemTitles) : sourcePages;
-  const pages = maximumLinesPerPage ? limitPageLines(titleSplitPages, maximumLinesPerPage) : titleSplitPages;
+  const titleSplitPages = effectivePoemTitles.length ? splitPagesAtPoemTitles(readingSourcePages, effectivePoemTitles) : readingSourcePages;
+  const pages = maximumCharactersPerPage
+    ? paginateProse(titleSplitPages, maximumCharactersPerPage)
+    : maximumLinesPerPage
+      ? limitPageLines(titleSplitPages, maximumLinesPerPage)
+      : titleSplitPages;
   const generatedContents = effectivePoemTitles.length > 0;
   const contentsPage = withContents ? pages.findIndex((blocks) => blocks.some((block) => /^১\./.test(block.text))) : -1;
   const sourceContents = (contentsPage >= 0 ? pages[contentsPage] : [])
@@ -227,7 +321,11 @@ function makeBook({ id, title, source, withContents = false, poemTitles = [], co
   let contentsPageIndexes = [];
   let adjustedContents = contents;
   if (generatedContents && contents.length) {
-    const generatedContentsPage = contentsBeforeFirstPoem ? Math.max(1, contents[0].page) : Math.min(1, appPages.length);
+    const generatedContentsPage = openingPages.length
+      ? 0
+      : contentsBeforeFirstPoem
+        ? Math.max(1, contents[0].page)
+        : Math.min(1, appPages.length);
     const splitContents = contents.length > 10;
     appPages.splice(generatedContentsPage, 0, [{ text: 'সূচিপত্র', alignment: 'center', isTitle: true }]);
     if (splitContents) appPages.splice(generatedContentsPage + 1, 0, [{ text: 'সূচিপত্র (চলমান)', alignment: 'center', isTitle: true, contentsContinuation: true }]);
@@ -238,10 +336,21 @@ function makeBook({ id, title, source, withContents = false, poemTitles = [], co
     appPages.splice(contentsPage + 1, 0, [{ text: 'সূচিপত্র (চলমান)', alignment: 'center', isTitle: true, contentsContinuation: true }]);
     adjustedContents = contents.map((item) => ({ ...item, page: item.page > contentsPage ? item.page + 1 : item.page }));
   }
+  if (openingPages.length) {
+    const openingPageCount = openingPages.length;
+    appPages.unshift(...openingPages);
+    contentsPageIndexes = contentsPageIndexes.map((pageIndex) => pageIndex + openingPageCount);
+    adjustedContents = adjustedContents.map((item) => ({ ...item, page: item.page + openingPageCount }));
+  }
   return {
     id,
     title,
     author: 'প্রণব আচার্য্য',
+    readingStyle,
+    // Kept separately for prose books so the reader can repaginate against
+    // the actual phone viewport instead of an approximate character count.
+    flowBlocks: readingStyle === 'prose' ? titleSplitPages.flat() : undefined,
+    openingPages: openingPages.length ? openingPages : undefined,
     pages: appPages.length ? appPages : [[{ text: 'এই বইটির পাঠ্য প্রস্তুত করা হচ্ছে।', alignment: 'left', isTitle: false }]],
     contents: adjustedContents,
     contentsPageIndexes
@@ -258,10 +367,14 @@ const books = [
   makeBook({
     id: 'koyekti-bhera', title: 'কয়েকটি ভেড়া ও একটি মানুষ', source: path.join(unicodeFolder, 'কয়েকটি ভেড়া ও একটি মানুষ (Unicode).docx'),
     contentsBeforeFirstPoem: true,
-    // Keep one line of visual headroom for responsive type sizing while
-    // guaranteeing that the rendered page never exceeds 22 lines.
-    maximumLinesPerPage: 21,
+    // This is a prose collection: preserve real paragraphs and let each
+    // page reflow as readable prose instead of verse-like fixed lines.
+    preserveParagraphs: true,
+    // A fuller mobile page while leaving room for paragraph spacing and titles.
+    maximumCharactersPerPage: 1044,
+    readingStyle: 'prose',
     poemTitleStartParagraph: 35,
+    openingPageBuilder: makeBheraOpeningPages,
     repaginatePoems: true,
     poemTitles: [
       'তুমি আমায় ডেকেছ', 'জীবনের এই সাধ, সুপক্ব যবের ঘ্রাণ', 'রায়ট', 'সবুজ পায়রা', 'রথযাত্রা',

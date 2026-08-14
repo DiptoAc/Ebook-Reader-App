@@ -214,6 +214,80 @@ function HighlightedText({ text, query }) {
   );
 }
 
+function paginateProseForViewport(flowBlocks, bookTitle) {
+  const paper = document.createElement("article");
+  const isPhone = window.matchMedia("(max-width: 560px)").matches;
+  paper.className = "paper-page prose-reading prose-measure-page";
+  paper.style.width = `${isPhone ? window.innerWidth : Math.min(620, window.innerWidth)}px`;
+  paper.style.height = `${isPhone
+    ? Math.max(420, window.innerHeight - 50)
+    : Math.min(1040, Math.max(820, window.innerHeight))}px`;
+  const pageHead = document.createElement("div");
+  pageHead.className = "page-head";
+  pageHead.innerHTML = `<span>${bookTitle}</span><span>১</span>`;
+  const copy = document.createElement("div");
+  copy.className = "page-copy";
+  paper.append(pageHead, copy);
+  document.body.appendChild(paper);
+
+  const pages = [];
+  let current = [];
+  const resetMeasurePage = () => copy.replaceChildren();
+  const flush = () => {
+    if (current.length) pages.push(current);
+    current = [];
+    resetMeasurePage();
+  };
+  const appendParagraph = (block, text, continuation = false) => {
+    const paragraph = document.createElement("p");
+    paragraph.className = `document-block align-${block.alignment}${block.isTitle ? " poem-title" : " prose-paragraph"}${continuation ? " prose-continuation" : ""}`;
+    paragraph.textContent = text;
+    copy.appendChild(paragraph);
+    const pageBlock = { ...block, text, proseContinuation: continuation };
+    current.push(pageBlock);
+    return paragraph;
+  };
+  try {
+    flowBlocks.forEach((block) => {
+      if (block.isTitle) {
+        flush();
+        appendParagraph(block, block.text);
+        return;
+      }
+      const words = block.text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+      let paragraph = null;
+      let segment = "";
+      words.forEach((word) => {
+        if (!paragraph) paragraph = appendParagraph(block, "");
+        const next = segment ? `${segment} ${word}` : word;
+        paragraph.textContent = next;
+        if (copy.scrollHeight > copy.clientHeight) {
+          if (segment) {
+            paragraph.textContent = segment;
+            current.at(-1).text = segment;
+            flush();
+            paragraph = appendParagraph(block, word, true);
+            segment = word;
+          } else {
+            paragraph.remove();
+            current.pop();
+            flush();
+            paragraph = appendParagraph(block, word);
+            segment = word;
+          }
+        } else {
+          segment = next;
+          current.at(-1).text = segment;
+        }
+      });
+    });
+    flush();
+    return pages;
+  } finally {
+    paper.remove();
+  }
+}
+
 export default function Library() {
   const [isReading, setIsReading] = useState(false);
   const [activeBookId, setActiveBookId] = useState(defaultBook.id);
@@ -236,19 +310,28 @@ export default function Library() {
   const [readeraView, setReaderaView] = useState("all");
   const [favoriteBooks, setFavoriteBooks] = useState({});
   const [startedBooks, setStartedBooks] = useState({});
+  const [responsiveProseLayout, setResponsiveProseLayout] = useState(null);
   const activeBook =
     books.find((item) => item.id === activeBookId) ?? defaultBook;
   // Every book, including the replacement edition of প্রেম ও অন্যান্য কবিতা,
   // now reads from its Unicode manuscript data rather than pre-rendered images.
   const usesWordRenderedPages = false;
-  const readerPageCount = usesWordRenderedPages ? 48 : activeBook.pages.length;
+  const readerPages = responsiveProseLayout?.bookId === activeBook.id
+    ? responsiveProseLayout.pages
+    : activeBook.pages;
+  const readerContents = responsiveProseLayout?.bookId === activeBook.id
+    ? responsiveProseLayout.contents
+    : activeBook.contents;
+  const readerPageCount = usesWordRenderedPages ? 48 : readerPages.length;
   const detectedContentsPage = Math.max(
     0,
-    activeBook.pages.findIndex((blocks) =>
+    readerPages.findIndex((blocks) =>
       blocks.some((block) => /^১\./.test(block.text)),
     ),
   );
-  const contentsPageIndexes = activeBook.contentsPageIndexes ?? [
+  const contentsPageIndexes = responsiveProseLayout?.bookId === activeBook.id
+    ? responsiveProseLayout.contentsPageIndexes
+    : activeBook.contentsPageIndexes ?? [
     detectedContentsPage,
   ];
   const contentsPage = contentsPageIndexes[0] ?? detectedContentsPage;
@@ -263,7 +346,7 @@ export default function Library() {
     return matchesSearch && matchesView;
   });
   const readeraViewLabels = { all: "সব বই", reading: "পড়ছি", favorites: "পছন্দের" };
-  const currentPageBlocks = activeBook.pages[page] ?? [];
+  const currentPageBlocks = readerPages[page] ?? [];
   const currentPageDensity = currentPageBlocks.reduce(
     (total, block) =>
       total + (block.text?.split("\n").length ?? 0) + (block.isTitle ? 1 : 0) + 1,
@@ -273,15 +356,29 @@ export default function Library() {
     (total, block) => total + (block.text?.length ?? 0),
     0,
   );
+  const isProseReading = activeBook.readingStyle === "prose";
+  const openingPageKind = currentPageBlocks.some((block) => block.openingRole === "book-title")
+    ? "opening-cover-page"
+    : currentPageBlocks.some((block) => block.openingRole === "dedication-heading")
+      ? "opening-dedication-page"
+      : currentPageBlocks.some((block) => block.openingRole === "intro-copy")
+        ? "opening-intro-page"
+        : "";
   const mobileReadingSize =
-    currentPageDensity > 20 || currentPageCharacters > 950
-      ? "mobile-reading-dense"
-      : currentPageDensity > 15 || currentPageCharacters > 690
-        ? "mobile-reading-compact"
-        : "mobile-reading-comfort";
+    isProseReading
+      ? currentPageCharacters > 620
+        ? "mobile-reading-dense"
+        : currentPageCharacters > 450
+          ? "mobile-reading-compact"
+          : "mobile-reading-comfort"
+      : currentPageDensity > 20 || currentPageCharacters > 950
+        ? "mobile-reading-dense"
+        : currentPageDensity > 15 || currentPageCharacters > 690
+          ? "mobile-reading-compact"
+          : "mobile-reading-comfort";
   const searchIndex = useMemo(() => {
     let poemTitle = activeBook.title;
-    return activeBook.pages.flatMap((blocks, pageIndex) =>
+    return readerPages.flatMap((blocks, pageIndex) =>
       blocks.flatMap((block, blockIndex) => {
         const text = block.text || "";
         if (block.isTitle && !block.contentsContinuation) {
@@ -298,7 +395,7 @@ export default function Library() {
         }];
       }),
     );
-  }, [activeBook]);
+  }, [activeBook, readerPages]);
   const normalizedSearchQuery = normalizeForSearch(searchQuery);
   const searchResults = normalizedSearchQuery
     ? searchIndex
@@ -332,6 +429,61 @@ export default function Library() {
     localStorage.setItem(FRONT_PAGE_DESIGN_STORAGE_KEY, openingDesign);
     setFrontPageDesign(openingDesign);
   }, []);
+
+  useEffect(() => {
+    if (!isReading || activeBook.readingStyle !== "prose" || !activeBook.flowBlocks?.length) {
+      setResponsiveProseLayout(null);
+      return undefined;
+    }
+    let cancelled = false;
+    let frame;
+    const repaginate = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const prosePages = paginateProseForViewport(activeBook.flowBlocks, activeBook.title);
+        if (cancelled || !prosePages.length) return;
+        const openingPages = activeBook.openingPages ?? [];
+        const firstSectionPage = prosePages.findIndex((blocks) =>
+          blocks.some((block) =>
+            block.isTitle && activeBook.contents?.some((item) =>
+              normalizeForSearch(item.label) === normalizeForSearch(block.text),
+            ),
+          ),
+        );
+        const contentsInsertAt = openingPages.length + Math.max(0, firstSectionPage);
+        const splitContents = (activeBook.contents?.length ?? 0) > 10;
+        const contents = (activeBook.contents ?? []).map((item) => {
+          const sourcePage = prosePages.findIndex((blocks) =>
+            blocks.some((block) => normalizeForSearch(block.text) === normalizeForSearch(item.label)),
+          );
+          const pageBeforeContents = sourcePage + openingPages.length;
+          const contentsPageCount = splitContents ? 2 : 1;
+          return { ...item, page: pageBeforeContents >= contentsInsertAt ? pageBeforeContents + contentsPageCount : pageBeforeContents };
+        }).filter((item) => item.page >= 0);
+        const pages = [...openingPages, ...prosePages];
+        pages.splice(contentsInsertAt, 0, [{ text: "সূচিপত্র", alignment: "center", isTitle: true }]);
+        if (splitContents) pages.splice(contentsInsertAt + 1, 0, [{ text: "সূচিপত্র (চলমান)", alignment: "center", isTitle: true, contentsContinuation: true }]);
+        setResponsiveProseLayout({
+          bookId: activeBook.id,
+          pages,
+          contents,
+          contentsPageIndexes: splitContents ? [contentsInsertAt, contentsInsertAt + 1] : [contentsInsertAt],
+        });
+      });
+    };
+    repaginate();
+    window.addEventListener("resize", repaginate);
+    document.fonts?.ready.then(repaginate);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", repaginate);
+    };
+  }, [isReading, activeBook]);
+
+  useEffect(() => {
+    if (page >= readerPageCount) setPage(Math.max(0, readerPageCount - 1));
+  }, [page, readerPageCount]);
 
   function saveBookmark(bookId, bookmarkPage) {
     setBookmarks((current) => ({ ...current, [bookId]: bookmarkPage }));
@@ -669,7 +821,7 @@ export default function Library() {
           <div className="bookmark">চিহ্নিত</div>
           <article
             key={page}
-            className={`paper-page ${direction} ${mobileReadingSize}${!usesWordRenderedPages && activeBook.pages[page].length > 25 ? " dense-page" : ""}${usesWordRenderedPages ? " rendered-doc-page" : ""}`}
+            className={`paper-page ${direction} ${mobileReadingSize}${isProseReading ? " prose-reading" : ""}${openingPageKind ? ` ${openingPageKind}` : ""}${!usesWordRenderedPages && (readerPages[page]?.length ?? 0) > 25 ? " dense-page" : ""}${usesWordRenderedPages ? " rendered-doc-page" : ""}`}
           >
             {!usesWordRenderedPages && (
               <div className="page-head">
@@ -684,24 +836,24 @@ export default function Library() {
                 alt={`${activeBook.title}, পৃষ্ঠা ${page + 1}`}
               />
             ) : contentsPageIndexes.includes(page) &&
-              activeBook.contents?.length ? (
+              readerContents?.length ? (
               <nav className="contents-list" aria-label="কবিতার সূচিপত্র">
                 <h2>
                   {page === contentsPageIndexes[0]
                     ? "সূচিপত্র"
                     : "সূচিপত্র (চলমান)"}
                 </h2>
-                {activeBook.contents
+                {readerContents
                   .slice(
                     contentsPageIndexes.length > 1 &&
                       page === contentsPageIndexes[0]
                       ? 0
                       : contentsPageIndexes.length > 1
-                        ? Math.ceil(activeBook.contents.length / 2)
+                        ? Math.ceil(readerContents.length / 2)
                         : 0,
                     contentsPageIndexes.length > 1 &&
                       page === contentsPageIndexes[0]
-                      ? Math.ceil(activeBook.contents.length / 2)
+                      ? Math.ceil(readerContents.length / 2)
                       : undefined,
                   )
                   .map((item) => (
@@ -717,10 +869,10 @@ export default function Library() {
                 onMouseUp={captureSelection}
                 onTouchEnd={captureSelection}
               >
-                {activeBook.pages[page].map((block, index) => (
+                {(readerPages[page] ?? []).map((block, index) => (
                   <p
                     key={index}
-                    className={`document-block align-${block.alignment}${block.spacer ? " document-spacer" : ""}${block.isTitle ? " poem-title" : ""}`}
+                    className={`document-block align-${block.alignment}${block.spacer ? " document-spacer" : ""}${block.isTitle ? " poem-title" : ""}${isProseReading && !block.isTitle ? " prose-paragraph" : ""}${block.proseContinuation ? " prose-continuation" : ""}${block.openingRole ? ` opening-${block.openingRole}` : ""}`}
                   >
                     <HighlightedText text={block.text} query={highlightedQuery} />
                   </p>
@@ -853,11 +1005,11 @@ export default function Library() {
             <span>{readeraVisibleBooks.length}টি বই</span>
           </div>
           <label className="readera-search">
-            <span aria-hidden="true">⌕</span> বই খুঁজুন
+            <span aria-hidden="true">⌕</span>
             <input
               value={readeraSearch}
               onChange={(event) => setReaderaSearch(event.target.value)}
-              placeholder="নাম লিখুন"
+              placeholder="বই খুঁজুন"
               aria-label="বই খুঁজুন"
             />
             {readeraSearch && <button onClick={() => setReaderaSearch("")} aria-label="Search মুছুন">×</button>}
