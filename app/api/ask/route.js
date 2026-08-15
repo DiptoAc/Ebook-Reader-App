@@ -6,30 +6,40 @@ const REQUEST_WINDOW_MS = 10 * 60 * 1000;
 const REQUEST_LIMIT = 12;
 const visits = new Map();
 let cachedModel = null;
+let modelLookup = null;
 
 async function availableGeminiModel(apiKey) {
   if (cachedModel) return cachedModel;
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
-  );
-  if (!response.ok) throw new Error("Unable to list Gemini models");
-  const { models = [] } = await response.json();
-  const preferredModels = [
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-flash-latest",
-    "gemini-3-flash-preview",
-  ];
-  const supported = new Set(
-    models
-      .filter((model) => model.supportedGenerationMethods?.includes("generateContent"))
-      .map((model) => model.name?.replace(/^models\//u, "")),
-  );
-  cachedModel = preferredModels.find((model) => supported.has(model)) ??
-    [...supported].find((model) => model.includes("flash"));
-  if (!cachedModel) throw new Error("No compatible Gemini text model is available");
-  return cachedModel;
+  if (!modelLookup) {
+    modelLookup = (async () => {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
+      );
+      if (!response.ok) throw new Error("Unable to list Gemini models");
+      const { models = [] } = await response.json();
+      const preferredModels = [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-latest",
+        "gemini-3-flash-preview",
+      ];
+      const supported = new Set(
+        models
+          .filter((model) => model.supportedGenerationMethods?.includes("generateContent"))
+          .map((model) => model.name?.replace(/^models\//u, "")),
+      );
+      const selected = preferredModels.find((model) => supported.has(model)) ??
+        [...supported].find((model) => model.includes("flash"));
+      if (!selected) throw new Error("No compatible Gemini text model is available");
+      cachedModel = selected;
+      return selected;
+    })().catch((error) => {
+      modelLookup = null;
+      throw error;
+    });
+  }
+  return modelLookup;
 }
 
 function clientKey(request) {
@@ -81,7 +91,12 @@ export async function POST(request) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.25, maxOutputTokens: 1200 },
+          generationConfig: {
+            maxOutputTokens: 1100,
+            thinkingConfig: model.startsWith("gemini-3")
+              ? { thinkingLevel: "minimal" }
+              : { thinkingBudget: 0 },
+          },
         }),
       },
     );
