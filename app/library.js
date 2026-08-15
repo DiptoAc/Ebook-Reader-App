@@ -214,10 +214,10 @@ function HighlightedText({ text, query }) {
   );
 }
 
-function paginateProseForViewport(flowBlocks, bookTitle, pageMargin) {
+function paginateProseForViewport(flowBlocks, bookTitle) {
   const paper = document.createElement("article");
   const isPhone = window.matchMedia("(max-width: 560px)").matches;
-  paper.className = `paper-page prose-reading prose-measure-page reader-margin-${pageMargin}`;
+  paper.className = "paper-page prose-reading prose-measure-page";
   paper.style.width = `${isPhone ? window.innerWidth : Math.min(620, window.innerWidth)}px`;
   paper.style.height = `${isPhone
     ? Math.max(420, window.innerHeight - 50)
@@ -305,9 +305,13 @@ export default function Library() {
   const [shareStatus, setShareStatus] = useState("");
   const [libraryNotice, setLibraryNotice] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantQuestion, setAssistantQuestion] = useState("");
+  const [assistantMessages, setAssistantMessages] = useState([]);
+  const [assistantError, setAssistantError] = useState("");
+  const [assistantLoading, setAssistantLoading] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [readerTheme, setReaderTheme] = useState("day");
-  const [pageMargin, setPageMargin] = useState("normal");
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedQuery, setHighlightedQuery] = useState("");
   const [readeraSearch, setReaderaSearch] = useState("");
@@ -432,12 +436,8 @@ export default function Library() {
     localStorage.setItem(FRONT_PAGE_DESIGN_STORAGE_KEY, openingDesign);
     setFrontPageDesign(openingDesign);
     const savedReaderTheme = localStorage.getItem("reader-page-theme");
-    const savedPageMargin = localStorage.getItem("reader-page-margin");
     if (savedReaderTheme === "night" || savedReaderTheme === "day") {
       setReaderTheme(savedReaderTheme);
-    }
-    if (["narrow", "normal", "wide"].includes(savedPageMargin)) {
-      setPageMargin(savedPageMargin);
     }
   }, []);
 
@@ -451,7 +451,7 @@ export default function Library() {
     const repaginate = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const prosePages = paginateProseForViewport(activeBook.flowBlocks, activeBook.title, pageMargin);
+        const prosePages = paginateProseForViewport(activeBook.flowBlocks, activeBook.title);
         if (cancelled || !prosePages.length) return;
         const openingPages = activeBook.openingPages ?? [];
         const firstSectionPage = prosePages.findIndex((blocks) =>
@@ -490,7 +490,7 @@ export default function Library() {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", repaginate);
     };
-  }, [isReading, activeBook, pageMargin]);
+  }, [isReading, activeBook]);
 
   useEffect(() => {
     if (page >= readerPageCount) setPage(Math.max(0, readerPageCount - 1));
@@ -719,12 +719,12 @@ export default function Library() {
     clearSelectionMenu();
   }
 
-  function openBook(bookId = defaultBook.id) {
+  function openBook(bookId = defaultBook.id, pageToOpen = null) {
     const selectedBook =
       books.find((item) => item.id === bookId) ?? defaultBook;
     const resumePage = Math.min(
       Math.max(
-        bookmarks[selectedBook.id] ??
+        pageToOpen ?? bookmarks[selectedBook.id] ??
           Number(localStorage.getItem(`bookmark-${selectedBook.id}`)) ??
           0,
         0,
@@ -742,6 +742,30 @@ export default function Library() {
       return next;
     });
     setIsReading(true);
+  }
+
+  async function askLibraryAssistant(event) {
+    event.preventDefault();
+    const question = assistantQuestion.trim();
+    if (!question || assistantLoading) return;
+    setAssistantLoading(true);
+    setAssistantError("");
+    setAssistantMessages((messages) => [...messages, { role: "user", text: question }]);
+    setAssistantQuestion("");
+    try {
+      const response = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "উত্তর পাওয়া যায়নি।");
+      setAssistantMessages((messages) => [...messages, { role: "assistant", text: data.answer, sources: data.sources ?? [] }]);
+    } catch (error) {
+      setAssistantError(error.message || "এখন উত্তর পাওয়া যাচ্ছে না।");
+    } finally {
+      setAssistantLoading(false);
+    }
   }
 
   function move(nextPage) {
@@ -763,11 +787,6 @@ export default function Library() {
   function chooseReaderTheme(theme) {
     setReaderTheme(theme);
     localStorage.setItem("reader-page-theme", theme);
-  }
-
-  function choosePageMargin(margin) {
-    setPageMargin(margin);
-    localStorage.setItem("reader-page-margin", margin);
   }
 
   function openSearchResult(result) {
@@ -800,7 +819,7 @@ export default function Library() {
               onClick={() => setAppearanceOpen((open) => !open)}
               aria-expanded={appearanceOpen}
               aria-controls="reader-appearance-settings"
-              aria-label="পড়ার রং ও পৃষ্ঠার margin বদলান"
+              aria-label="পৃষ্ঠার রং বদলান"
             >
               ◐ <span>সাজ</span>
             </button>
@@ -828,16 +847,6 @@ export default function Library() {
                 <legend>পৃষ্ঠা রং</legend>
                 <button className={readerTheme === "day" ? "selected" : ""} onClick={() => chooseReaderTheme("day")}>দিন</button>
                 <button className={readerTheme === "night" ? "selected" : ""} onClick={() => chooseReaderTheme("night")}>রাত</button>
-              </fieldset>
-              <fieldset>
-                <legend>পাতার পাশের ফাঁকা জায়গা</legend>
-                {[
-                  ["narrow", "কম"],
-                  ["normal", "স্বাভাবিক"],
-                  ["wide", "বেশি"],
-                ].map(([value, label]) => (
-                  <button key={value} className={pageMargin === value ? "selected" : ""} onClick={() => choosePageMargin(value)}>{label}</button>
-                ))}
               </fieldset>
             </section>
           )}
@@ -913,7 +922,7 @@ export default function Library() {
           <div className="bookmark">চিহ্নিত</div>
           <article
             key={page}
-            className={`paper-page ${direction} ${mobileReadingSize} reader-theme-${readerTheme} reader-margin-${pageMargin}${isProseReading ? " prose-reading" : ""}${openingPageKind ? ` ${openingPageKind}` : ""}${!usesWordRenderedPages && (readerPages[page]?.length ?? 0) > 25 ? " dense-page" : ""}${usesWordRenderedPages ? " rendered-doc-page" : ""}`}
+            className={`paper-page ${direction} ${mobileReadingSize} reader-theme-${readerTheme}${isProseReading ? " prose-reading" : ""}${openingPageKind ? ` ${openingPageKind}` : ""}${!usesWordRenderedPages && (readerPages[page]?.length ?? 0) > 25 ? " dense-page" : ""}${usesWordRenderedPages ? " rendered-doc-page" : ""}`}
           >
             {!usesWordRenderedPages && (
               <div className="page-head">
@@ -1329,6 +1338,76 @@ export default function Library() {
               onClick={() => showLibraryNotice("এই জায়গার বইটি এখনও যোগ করা হয়নি")}
               aria-label="নতুন বইয়ের জন্য খালি স্থান"
             />
+          </div>
+        </section>
+      )}
+      <button
+        className="library-chat-launcher"
+        onClick={() => setAssistantOpen(true)}
+        aria-label="বই নিয়ে প্রশ্ন করুন"
+      >
+        <span aria-hidden="true">✦</span>
+        <span>জিজ্ঞেস করুন</span>
+      </button>
+      {assistantOpen && (
+        <section className="library-assistant" role="dialog" aria-modal="true" aria-label="বই নিয়ে জিজ্ঞেস করুন">
+          <div className="library-assistant-panel">
+            <header className="library-assistant-heading">
+              <span aria-hidden="true">✦</span>
+              <div>
+                <h2>বই নিয়ে জিজ্ঞেস করুন</h2>
+                <p>এই পাঠাগারের বই থেকেই উত্তর ও সাজেশন পাওয়া যাবে</p>
+              </div>
+              <button onClick={() => setAssistantOpen(false)} aria-label="চ্যাট বন্ধ করুন">×</button>
+            </header>
+            <div className="assistant-conversation" aria-live="polite">
+              {!assistantMessages.length && (
+                <div className="assistant-welcome">
+                  <p>কবিতা, গল্প, বিষয় বা কোনো পঙ্‌ক্তি নিয়ে প্রশ্ন করুন।</p>
+                  <div className="assistant-prompts" aria-label="প্রশ্নের পরামর্শ">
+                    {[
+                      "রোমান্টিক কবিতা সাজেস্ট করো",
+                      "শৈশব নিয়ে কবিতা খুঁজুন",
+                      "কোন বই দিয়ে পড়া শুরু করব?",
+                    ].map((prompt) => (
+                      <button key={prompt} onClick={() => { setAssistantQuestion(prompt); setAssistantError(""); }}>
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {assistantMessages.map((message, messageIndex) => (
+                <div key={messageIndex} className={`assistant-message ${message.role}`}>
+                  <p>{message.text}</p>
+                  {message.role === "assistant" && message.sources?.length > 0 && (
+                    <div className="assistant-sources">
+                      <strong>উৎস</strong>
+                      {message.sources.map((source, index) => (
+                        <button key={`${source.bookId}-${source.page}-${index}`} onClick={() => { setAssistantOpen(false); openBook(source.bookId, source.page); }}>
+                          [{index + 1}] {source.bookTitle} — {source.sectionTitle}, পৃষ্ঠা {source.page + 1}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {assistantLoading && <div className="assistant-message assistant-thinking">পাঠাগার খুঁজছি…</div>}
+              {assistantError && <p className="assistant-error" role="alert">{assistantError}</p>}
+            </div>
+            <form className="library-assistant-form" onSubmit={askLibraryAssistant}>
+              <input
+                autoFocus
+                value={assistantQuestion}
+                onChange={(event) => setAssistantQuestion(event.target.value)}
+                placeholder="কবিতা, বিষয় বা কোনো লাইন লিখুন"
+                aria-label="পাঠাগারকে প্রশ্ন করুন"
+                maxLength={500}
+              />
+              <button type="submit" disabled={!assistantQuestion.trim() || assistantLoading} aria-label="প্রশ্ন পাঠান">
+                {assistantLoading ? "…" : "↑"}
+              </button>
+            </form>
           </div>
         </section>
       )}
