@@ -442,6 +442,24 @@ export default function Library() {
   }, []);
 
   useEffect(() => {
+    if (!assistantOpen || !window.visualViewport) return undefined;
+    const updateAssistantViewport = () => {
+      document.documentElement.style.setProperty(
+        "--assistant-visual-height",
+        `${Math.round(window.visualViewport.height)}px`,
+      );
+    };
+    updateAssistantViewport();
+    window.visualViewport.addEventListener("resize", updateAssistantViewport);
+    window.visualViewport.addEventListener("scroll", updateAssistantViewport);
+    return () => {
+      window.visualViewport.removeEventListener("resize", updateAssistantViewport);
+      window.visualViewport.removeEventListener("scroll", updateAssistantViewport);
+      document.documentElement.style.removeProperty("--assistant-visual-height");
+    };
+  }, [assistantOpen]);
+
+  useEffect(() => {
     if (!isReading || activeBook.readingStyle !== "prose" || !activeBook.flowBlocks?.length) {
       setResponsiveProseLayout(null);
       return undefined;
