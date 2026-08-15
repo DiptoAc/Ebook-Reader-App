@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "prepare-book": "node scripts/prepare-book.mjs",
-    "dev": "npm run prepare-book && next dev",
+    "dev": "npm run prepare-book && node --use-system-ca node_modules/next/dist/bin/next dev",
     "build": "npm run prepare-book && next build",
     "start": "next start",
     "lint": "next lint"
