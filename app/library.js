@@ -47,7 +47,7 @@ const frontPageDesigns = [
   },
   {
     id: "expanding",
-    label: "বিস্তৃত ক্যারোসেল",
+    label: "ক্যারোসেল",
     description: "মাঝের বইটি বড় হয়ে ওঠে, পাশেরগুলো ছোট হয়ে সরে যায়",
   },
   {
@@ -566,7 +566,7 @@ export default function Library() {
   }
 
   function moveExpandingCarousel(amount) {
-    const itemCount = libraryBooks.length + 2;
+    const itemCount = libraryBooks.length;
     setExpandingIndex((current) => (current + amount + itemCount) % itemCount);
   }
 
@@ -1181,7 +1181,7 @@ export default function Library() {
           </nav>
         </section>
       ) : frontPageDesign === "expanding" ? (
-        <section className="expanding-carousel" aria-label="বিস্তৃত বইয়ের ক্যারোসেল">
+        <section className="expanding-carousel" aria-label="বইয়ের ক্যারোসেল">
           <p>ডানে-বামে সোয়াইপ বা স্ক্রল করে বই বাছুন</p>
           <div
             className="expanding-track"
@@ -1191,7 +1191,7 @@ export default function Library() {
             role="region"
             aria-label="সোয়াইপ বা স্ক্রল করে বইয়ের তালিকা সরান"
           >
-            {[...libraryBooks, null, null].map((entry, index, items) => {
+            {libraryBooks.map((entry, index, items) => {
               let offset = index - expandingIndex;
               if (offset > items.length / 2) offset -= items.length;
               if (offset < -items.length / 2) offset += items.length;
@@ -1202,29 +1202,20 @@ export default function Library() {
                 opacity: visible ? 1 : 0,
                 pointerEvents: offset === 0 ? "auto" : "none",
               };
-              return entry ? (
-                <DisplayBook
-                  key={entry.title}
-                  entry={entry}
-                  className={className}
-                  style={style}
-                  onOpen={openBook}
-                  onUnavailable={showLibraryNotice}
-                  savedPage={bookmarks[entry.id] ?? 0}
-                />
-              ) : (
-                <FutureBookSlot
-                  key={`future-expanding-${index}`}
-                  className={className}
-                  style={style}
-                  onUnavailable={showLibraryNotice}
-                />
-              );
+              return <DisplayBook
+                key={entry.title}
+                entry={entry}
+                className={className}
+                style={style}
+                onOpen={openBook}
+                onUnavailable={showLibraryNotice}
+                savedPage={bookmarks[entry.id] ?? 0}
+              />;
             })}
           </div>
           <div className="expanding-caption" aria-live="polite">
             <strong>
-              {libraryBooks[expandingIndex]?.title || "নতুন বই আসছে"}
+              {libraryBooks[expandingIndex]?.title}
             </strong>
             <span>
               {libraryBooks[expandingIndex]?.readable
@@ -1233,12 +1224,12 @@ export default function Library() {
             </span>
           </div>
           <div className="expanding-dots" aria-label="বই নির্বাচন">
-            {[...libraryBooks, null, null].map((entry, index) => (
+            {libraryBooks.map((entry, index) => (
               <button
                 key={`expanding-dot-${index}`}
                 className={index === expandingIndex ? "active" : ""}
                 onClick={() => setExpandingIndex(index)}
-                aria-label={entry?.title || "নতুন বইয়ের খালি স্থান"}
+                aria-label={entry.title}
                 aria-current={index === expandingIndex ? "true" : undefined}
               />
             ))}
