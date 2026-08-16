@@ -18,9 +18,9 @@ async function availableGeminiModel(apiKey) {
       if (!response.ok) throw new Error("Unable to list Gemini models");
       const { models = [] } = await response.json();
       const preferredModels = [
+        "gemini-3.5-flash-lite",
         "gemini-3.6-flash",
         "gemini-3.5-flash",
-        "gemini-3.5-flash-lite",
         "gemini-flash-latest",
         "gemini-3-flash-preview",
       ];
