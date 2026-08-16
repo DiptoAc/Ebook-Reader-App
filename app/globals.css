@@ -106,12 +106,13 @@ button.future-book-slot { cursor: pointer; }
   bottom: 1.35rem;
   max-width: min(88vw, 360px);
   padding: .72rem 1rem;
-  border: 1px solid rgba(255, 220, 151, .7);
+  border: 2px solid #ffd27a;
   border-radius: 12px;
-  color: #fff1cd;
-  background: rgba(56, 19, 7, .94);
-  box-shadow: 0 8px 24px rgba(20, 4, 1, .5);
-  font-size: .8rem;
+  color: #fff8e9;
+  background: #8c2f12;
+  box-shadow: 0 10px 28px rgba(20, 4, 1, .68), 0 0 0 4px rgba(255, 205, 105, .2);
+  font-size: .84rem;
+  font-weight: 600;
   text-align: center;
   transform: translateX(50%);
 }
@@ -1105,6 +1106,7 @@ button.future-book-slot { cursor: pointer; }
 .assistant-sources { display: grid; gap: .35rem; margin-top: .85rem; padding-top: .7rem; border-top: 1px solid rgba(117, 71, 32, .24); }
 .assistant-sources strong { color: #855125; font-size: .72rem; }
 .assistant-sources button { border: 0; padding: 0; color: #713718; background: transparent; cursor: pointer; font: inherit; font-size: .73rem; text-align: left; text-decoration: underline; text-decoration-color: rgba(113, 55, 24, .4); text-underline-offset: .18rem; }
+.assistant-sources .assistant-manual-source { color: #713718; font-size: .73rem; line-height: 1.45; }
 .assistant-sources button:hover, .assistant-sources button:focus-visible { color: #ac581e; outline: none; }
 
 @media (max-width: 560px) {

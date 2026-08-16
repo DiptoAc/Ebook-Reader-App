@@ -3,6 +3,10 @@ import "./globals.css";
 export const metadata = {
   title: "প্রণব আচার্য্য",
   description: "একটি আরামদায়ক ডিজিটাল পাঠাগার",
+  icons: {
+    icon: "/Logo/Logo.webp",
+    shortcut: "/Logo/Logo.webp",
+  },
 };
 
 export default function RootLayout({ children }) {

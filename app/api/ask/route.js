@@ -98,10 +98,10 @@ export async function POST(request) {
       });
     }
     const context = sources.map((source, index) => (
-      `[${index + 1}] বই: ${source.bookTitle}\nবিভাগ: ${source.sectionTitle}\nপৃষ্ঠা: ${source.page + 1}\nপাঠ্য:\n${source.text}`
+      `[${index + 1}] ${source.kind === "manual" ? "নির্দেশিকা" : "বই"}: ${source.bookTitle}\nবিভাগ: ${source.sectionTitle}\n${source.kind === "manual" ? "" : `পৃষ্ঠা: ${source.page + 1}\n`}পাঠ্য:\n${source.text}`
     )).join("\n\n");
     const models = modelsToTry(await availableGeminiModels(apiKey));
-    const prompt = `তুমি প্রণব আচার্য্যের ডিজিটাল পাঠাগারের সহকারী। শুধু নিচে দেওয়া পাঠ্যাংশের ভিত্তিতে শুদ্ধ, সহজ বাংলায় উত্তর দাও। পাঠ্যাংশে উত্তর না থাকলে স্পষ্টভাবে বলো যে পাওয়া যায়নি। কোনো তথ্য বানাবে না। কবিতা সাজেস্ট করতে বললে পাঠ্যাংশে থাকা কবিতাই সাজেস্ট করবে এবং কারণ সংক্ষেপে বলবে। উত্তরটি ১৮০ শব্দের মধ্যে রাখো। উত্তরের শেষে [১], [২]-এর মতো source number ব্যবহার করো।\n\nপ্রশ্ন: ${cleanQuestion}\n\nপাঠ্যাংশ:\n${context}`;
+    const prompt = `তুমি প্রণব আচার্য্যের ডিজিটাল পাঠাগারের সহকারী। শুধু নিচে দেওয়া বইয়ের পাঠ্যাংশ ও অ্যাপ-ব্যবহার নির্দেশিকার ভিত্তিতে শুদ্ধ, সহজ বাংলায় উত্তর দাও। অ্যাপ কীভাবে ব্যবহার করতে হয়—এমন প্রশ্নে নির্দেশিকার তথ্য ব্যবহার করো; বই, কবিতা বা লেখক সম্পর্কিত প্রশ্নে বইয়ের পাঠ্যাংশ ব্যবহার করো। পাঠ্যাংশে উত্তর না থাকলে স্পষ্টভাবে বলো যে পাওয়া যায়নি। কোনো তথ্য বানাবে না। কবিতা সাজেস্ট করতে বললে পাঠ্যাংশে থাকা কবিতাই সাজেস্ট করবে এবং কারণ সংক্ষেপে বলবে। উত্তরটি ১৮০ শব্দের মধ্যে রাখো। উত্তরের শেষে [১], [২]-এর মতো source number ব্যবহার করো।\n\nপ্রশ্ন: ${cleanQuestion}\n\nপাঠ্যাংশ:\n${context}`;
     for (const model of models) {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
@@ -124,7 +124,7 @@ export async function POST(request) {
         const answer = data.candidates?.[0]?.content?.parts?.map((part) => part.text).join("").trim();
         if (!answer) throw new Error("Empty Gemini response");
         activeModel = model;
-        return Response.json({ answer, sources: sources.map(({ bookId, bookTitle, sectionTitle, page }) => ({ bookId, bookTitle, sectionTitle, page })) });
+        return Response.json({ answer, sources: sources.map(({ kind, bookId, bookTitle, sectionTitle, page }) => ({ kind, bookId, bookTitle, sectionTitle, page })) });
       }
       const errorText = (await response.text()).slice(0, 500);
       console.error("Gemini request failed", model, response.status, errorText);

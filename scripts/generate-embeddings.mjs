@@ -3,9 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeLibraryChunks } from "../lib/book-chunks.mjs";
+import { makeManualChunks } from "../lib/manual-chunks.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourcePath = path.join(root, "lib", "book-content.js");
+const manualPath = path.join(root, "docs", "ব্যবহার-নির্দেশিকা.md");
 const outputPath = path.join(root, "lib", "book-embeddings.json");
 const model = "gemini-embedding-2";
 const dimensions = 768;
@@ -57,15 +59,33 @@ async function embedBatch(chunks, apiKey) {
 
 const apiKey = loadLocalApiKey();
 const books = await loadBooks();
-const chunks = makeLibraryChunks(books);
+const chunks = [
+  ...makeLibraryChunks(books),
+  ...makeManualChunks(fs.readFileSync(manualPath, "utf8")),
+];
 const sourceSignature = crypto.createHash("sha256")
   .update(chunks.map((chunk) => `${chunk.id}\n${chunk.text}`).join("\n\n"))
   .digest("hex");
 const savedIndex = fs.existsSync(outputPath) ? JSON.parse(fs.readFileSync(outputPath, "utf8")) : null;
-const embeddedById = new Map(
-  savedIndex?.sourceSignature === sourceSignature && savedIndex.model === model && savedIndex.dimensions === dimensions
+const savedById = new Map(
+  savedIndex?.model === model && savedIndex.dimensions === dimensions
     ? savedIndex.chunks.map((chunk) => [chunk.id, chunk])
     : [],
+);
+const embeddedById = new Map(
+  chunks.flatMap((chunk) => {
+    const saved = savedById.get(chunk.id);
+    if (!saved || saved.text !== chunk.text || saved.embedding?.length !== dimensions) return [];
+    return [[chunk.id, {
+      ...saved,
+      kind: chunk.kind ?? "book",
+      bookId: chunk.bookId,
+      bookTitle: chunk.bookTitle,
+      sectionTitle: chunk.sectionTitle,
+      page: chunk.page,
+      text: chunk.text,
+    }]];
+  }),
 );
 
 function saveIndex() {
@@ -90,6 +110,7 @@ for (let start = 0; start < pendingChunks.length; start += batchSize) {
   batch.forEach((chunk, index) => {
     embeddedById.set(chunk.id, {
       id: chunk.id,
+      kind: chunk.kind ?? "book",
       bookId: chunk.bookId,
       bookTitle: chunk.bookTitle,
       sectionTitle: chunk.sectionTitle,

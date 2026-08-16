@@ -53,7 +53,7 @@ const frontPageDesigns = [
   {
     id: "readera",
     label: "রিডার তালিকা",
-    description: "Readera-অনুপ্রাণিত পরিচ্ছন্ন বইয়ের তালিকা",
+    description: "পরিচ্ছন্ন বইয়ের তালিকা — মোবাইল দেখার জন্য সেরা",
   },
 ];
 
@@ -1401,7 +1401,11 @@ export default function Library() {
                   {message.role === "assistant" && message.sources?.length > 0 && (
                     <div className="assistant-sources">
                       <strong>উৎস</strong>
-                      {message.sources.map((source, index) => (
+                      {message.sources.map((source, index) => source.kind === "manual" ? (
+                        <span key={`${source.bookId}-${source.page}-${index}`} className="assistant-manual-source">
+                          [{index + 1}] {source.bookTitle} — {source.sectionTitle}
+                        </span>
+                      ) : (
                         <button key={`${source.bookId}-${source.page}-${index}`} onClick={() => { setAssistantOpen(false); openBook(source.bookId, source.page); }}>
                           [{index + 1}] {source.bookTitle} — {source.sectionTitle}, পৃষ্ঠা {source.page + 1}
                         </button>
@@ -1433,8 +1437,12 @@ export default function Library() {
       <a
         className="author-blog-link"
         href="https://proccod.blogspot.com/"
-        target="_blank"
-        rel="noreferrer"
+        onClick={(event) => {
+          event.preventDefault();
+          const blogUrl = event.currentTarget.href;
+          showLibraryNotice("লেখকের ব্লগটি দেখতে ডেস্কটপ ভিউ ব্যবহার করার পরামর্শ দেওয়া হচ্ছে");
+          window.setTimeout(() => { window.location.assign(blogUrl); }, 1000);
+        }}
       >
         লেখকের আরও লেখা পড়ুন: <strong>লেখকের ব্লগ ↗</strong>
       </a>
