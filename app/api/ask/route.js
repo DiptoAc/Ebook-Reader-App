@@ -17,6 +17,40 @@ let cachedModels = null;
 let modelLookup = null;
 let activeModel = null;
 const exhaustedModels = new Map();
+const ALLOWED_ORIGINS = new Set([
+  "https://koilas.netlify.app",
+  "https://localhost",
+  "http://localhost",
+  "capacitor://localhost",
+]);
+
+function corsHeaders(request) {
+  const origin = request.headers.get("origin");
+  const allowedOrigin = ALLOWED_ORIGINS.has(origin)
+    ? origin
+    : "https://koilas.netlify.app";
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  };
+}
+
+function json(request, body, options = {}) {
+  return Response.json(body, {
+    ...options,
+    headers: {
+      ...corsHeaders(request),
+      ...(options.headers ?? {}),
+    },
+  });
+}
+
+export function OPTIONS(request) {
+  return new Response(null, { status: 204, headers: corsHeaders(request) });
+}
 
 async function availableGeminiModels(apiKey) {
   if (cachedModels) return cachedModels;
@@ -79,20 +113,20 @@ function isRateLimited(request) {
 export async function POST(request) {
   try {
     if (isRateLimited(request)) {
-      return Response.json({ error: "কিছুক্ষণ পরে আবার চেষ্টা করুন।" }, { status: 429 });
+      return json(request, { error: "কিছুক্ষণ পরে আবার চেষ্টা করুন।" }, { status: 429 });
     }
     const { question } = await request.json();
     const cleanQuestion = String(question ?? "").replace(/\s+/gu, " ").trim();
     if (cleanQuestion.length < 2 || cleanQuestion.length > 500) {
-      return Response.json({ error: "২ থেকে ৫০০ অক্ষরের মধ্যে প্রশ্ন লিখুন।" }, { status: 400 });
+      return json(request, { error: "২ থেকে ৫০০ অক্ষরের মধ্যে প্রশ্ন লিখুন।" }, { status: 400 });
     }
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return Response.json({ error: "লাইব্রেরি সহকারীটি এখনও প্রস্তুত করা হচ্ছে।" }, { status: 503 });
+      return json(request, { error: "লাইব্রেরি সহকারীটি এখনও প্রস্তুত করা হচ্ছে।" }, { status: 503 });
     }
     const sources = await retrieveLibraryContext(cleanQuestion, apiKey);
     if (!sources.length) {
-      return Response.json({
+      return json(request, {
         answer: "এই পাঠাগারের বইগুলোতে প্রশ্নটির সঙ্গে মিল পাওয়া যায়নি। অন্যভাবে লিখে চেষ্টা করুন।",
         sources: [],
       });
@@ -124,7 +158,7 @@ export async function POST(request) {
         const answer = data.candidates?.[0]?.content?.parts?.map((part) => part.text).join("").trim();
         if (!answer) throw new Error("Empty Gemini response");
         activeModel = model;
-        return Response.json({ answer, sources: sources.map(({ kind, bookId, bookTitle, sectionTitle, page }) => ({ kind, bookId, bookTitle, sectionTitle, page })) });
+        return json(request, { answer, sources: sources.map(({ kind, bookId, bookTitle, sectionTitle, page }) => ({ kind, bookId, bookTitle, sectionTitle, page })) });
       }
       const errorText = (await response.text()).slice(0, 500);
       console.error("Gemini request failed", model, response.status, errorText);
@@ -139,11 +173,11 @@ export async function POST(request) {
         if (activeModel === model) activeModel = null;
         continue;
       }
-      return Response.json({ error: "এখন উত্তর তৈরি করা যাচ্ছে না। পরে আবার চেষ্টা করুন।" }, { status: 502 });
+      return json(request, { error: "এখন উত্তর তৈরি করা যাচ্ছে না। পরে আবার চেষ্টা করুন।" }, { status: 502 });
     }
-    return Response.json({ error: "আজকের জন্য AI সহকারীর প্রশ্নসীমা শেষ হয়েছে। পরে আবার চেষ্টা করুন।" }, { status: 429 });
+    return json(request, { error: "আজকের জন্য AI সহকারীর প্রশ্নসীমা শেষ হয়েছে। পরে আবার চেষ্টা করুন।" }, { status: 429 });
   } catch (error) {
     console.error("Library assistant error", error);
-    return Response.json({ error: "প্রশ্নটি বোঝা যায়নি। আবার চেষ্টা করুন।" }, { status: 500 });
+    return json(request, { error: "প্রশ্নটি বোঝা যায়নি। আবার চেষ্টা করুন।" }, { status: 500 });
   }
 }

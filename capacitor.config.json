@@ -1,0 +1,8 @@
+{
+  "appId": "com.diptoac.koilas",
+  "appName": "প্রণব আচার্য্যের পাঠাগার",
+  "webDir": "out",
+  "android": {
+    "backgroundColor": "#f5ead9"
+  }
+}

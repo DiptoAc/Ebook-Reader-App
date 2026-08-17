@@ -4,6 +4,20 @@ A responsive Bengali ebook library and reader for Pranab Acharyya's books. It pr
 
 For reader-facing instructions in Bengali, see [ব্যবহার নির্দেশিকা](docs/ব্যবহার-নির্দেশিকা.md).
 
+## Android APK build
+
+The Android build bundles the reading UI and the already-prepared `lib/book-content.js` in the APK. It does not run DOCX preparation during the Android build. Source DOCX manuscripts, `docs/`, and server-only RAG/embedding files are not copied into the Android bundle. The AI chat continues to use the Netlify API endpoint, so it needs internet access and the API key remains server-side.
+
+After installing Android Studio and the Android SDK, run:
+
+```bash
+npm install
+npx cap add android
+npm run android:open
+```
+
+For later updates, use `npm run android:open` again. In Android Studio, create a debug APK with **Build → Build APK(s)** or a signed release APK with **Build → Generate Signed Bundle / APK**.
+
 ## Features
 
 ### Library and books

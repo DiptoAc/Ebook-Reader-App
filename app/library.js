@@ -776,7 +776,8 @@ export default function Library() {
     setAssistantMessages((messages) => [...messages, { role: "user", text: question }]);
     setAssistantQuestion("");
     try {
-      const response = await fetch("/api/ask", {
+      const assistantApiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "/api/ask";
+      const response = await fetch(assistantApiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question }),

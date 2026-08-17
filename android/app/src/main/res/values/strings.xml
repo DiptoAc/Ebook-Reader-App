@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">প্রণব আচার্য্যের পাঠাগার</string>
+    <string name="title_activity_main">প্রণব আচার্য্যের পাঠাগার</string>
+    <string name="package_name">com.diptoac.koilas</string>
+    <string name="custom_url_scheme">com.diptoac.koilas</string>
+</resources>

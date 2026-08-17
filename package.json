@@ -7,15 +7,21 @@
     "generate-embeddings": "node --use-system-ca scripts/generate-embeddings.mjs",
     "dev": "npm run prepare-book && node --use-system-ca node_modules/next/dist/bin/next dev",
     "build": "npm run prepare-book && next build",
+    "build:android:web": "node scripts/build-android-web.mjs",
+    "android:sync": "npm run build:android:web && npx cap sync android",
+    "android:open": "npm run android:sync && npx cap open android",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "next": "15.5.21",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "@abdalgolabs/ansi-unicode-converter": "^1.0.5"
+    "@abdalgolabs/ansi-unicode-converter": "^1.0.5",
+    "@capacitor/cli": "^8.0.0"
   }
 }

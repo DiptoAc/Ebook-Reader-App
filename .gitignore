@@ -1,5 +1,9 @@
 node_modules/ 
 .next/ 
 .next-dev/
+.capacitor/
+out/
+android/.gradle/
+android/app/build/
 .env.local
 *.log 
