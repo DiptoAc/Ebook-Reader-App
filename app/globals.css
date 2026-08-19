@@ -296,14 +296,15 @@ button.future-book-slot { cursor: pointer; }
   box-shadow: none;
 }
 .readera-toolbar {
-  grid-template-columns: 42px 1fr 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   min-height: calc(56px + env(safe-area-inset-top));
   padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
   color: #fff7e7;
   background: linear-gradient(105deg, #4a1d0b, #7d3b1b 52%, #4b1d0a);
   box-shadow: 0 2px 8px rgba(47,17,5,.35);
 }
-.readera-toolbar strong { font-size: 1.05rem; letter-spacing: .015em; }
 .readera-icon-button {
   width: 36px;
   height: 36px;

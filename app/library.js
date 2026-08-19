@@ -301,6 +301,8 @@ export default function Library() {
   const [expandingIndex, setExpandingIndex] = useState(0);
   const expandingTouchStart = useRef(null);
   const readerTouchStart = useRef(null);
+  const proseLoadingStartedAt = useRef(0);
+  const proseLoadingFallback = useRef(null);
   const [selectionMenu, setSelectionMenu] = useState(null);
   const [shareStatus, setShareStatus] = useState("");
   const [libraryNotice, setLibraryNotice] = useState("");
@@ -319,6 +321,7 @@ export default function Library() {
   const [favoriteBooks, setFavoriteBooks] = useState({});
   const [startedBooks, setStartedBooks] = useState({});
   const [responsiveProseLayout, setResponsiveProseLayout] = useState(null);
+  const [isProsePaginationLoading, setIsProsePaginationLoading] = useState(false);
   const activeBook =
     books.find((item) => item.id === activeBookId) ?? defaultBook;
   // Every book, including the replacement edition of প্রেম ও অন্যান্য কবিতা,
@@ -465,17 +468,36 @@ export default function Library() {
   }, [assistantOpen]);
 
   useEffect(() => {
-    if (!isReading || activeBook.readingStyle !== "prose" || !activeBook.flowBlocks?.length) {
+    if (activeBook.readingStyle !== "prose" || !activeBook.flowBlocks?.length) {
       setResponsiveProseLayout(null);
+      setIsProsePaginationLoading(false);
       return undefined;
     }
+    if (!isReading && !isProsePaginationLoading) return undefined;
     let cancelled = false;
     let frame;
+    let loadingTimeout;
+    const shouldOpenReaderAfterPagination = !isReading;
+    const finishProsePagination = () => {
+      const minimumVisibleTime = 700;
+      const remainingTime = Math.max(0, minimumVisibleTime - (Date.now() - proseLoadingStartedAt.current));
+      window.clearTimeout(loadingTimeout);
+      loadingTimeout = window.setTimeout(() => {
+        if (cancelled) return;
+        window.clearTimeout(proseLoadingFallback.current);
+        proseLoadingFallback.current = null;
+        setIsProsePaginationLoading(false);
+        if (shouldOpenReaderAfterPagination) setIsReading(true);
+      }, remainingTime);
+    };
     const repaginate = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const prosePages = paginateProseForViewport(activeBook.flowBlocks, activeBook.title);
-        if (cancelled || !prosePages.length) return;
+        if (cancelled || !prosePages.length) {
+          if (!cancelled) finishProsePagination();
+          return;
+        }
         const openingPages = activeBook.openingPages ?? [];
         const firstSectionPage = prosePages.findIndex((blocks) =>
           blocks.some((block) =>
@@ -503,6 +525,7 @@ export default function Library() {
           contents,
           contentsPageIndexes: splitContents ? [contentsInsertAt, contentsInsertAt + 1] : [contentsInsertAt],
         });
+        finishProsePagination();
       });
     };
     repaginate();
@@ -511,6 +534,7 @@ export default function Library() {
     return () => {
       cancelled = true;
       cancelAnimationFrame(frame);
+      window.clearTimeout(loadingTimeout);
       window.removeEventListener("resize", repaginate);
     };
   }, [isReading, activeBook]);
@@ -754,7 +778,11 @@ export default function Library() {
       ),
       selectedBook.pages.length - 1,
     );
+    window.clearTimeout(proseLoadingFallback.current);
+    proseLoadingFallback.current = null;
     setActiveBookId(selectedBook.id);
+    proseLoadingStartedAt.current = selectedBook.readingStyle === "prose" ? Date.now() : 0;
+    setIsProsePaginationLoading(selectedBook.readingStyle === "prose");
     setPage(resumePage);
     setSearchOpen(false);
     setSearchQuery("");
@@ -764,7 +792,15 @@ export default function Library() {
       localStorage.setItem("started-books", JSON.stringify(next));
       return next;
     });
-    setIsReading(true);
+    if (selectedBook.readingStyle !== "prose") {
+      setIsReading(true);
+    } else {
+      proseLoadingFallback.current = window.setTimeout(() => {
+        setIsProsePaginationLoading(false);
+        setIsReading(true);
+        proseLoadingFallback.current = null;
+      }, 4000);
+    }
   }
 
   async function askLibraryAssistant(event) {
@@ -799,6 +835,8 @@ export default function Library() {
   }
 
   function closeBook() {
+    window.clearTimeout(proseLoadingFallback.current);
+    proseLoadingFallback.current = null;
     saveBookmark(activeBook.id, page);
     setSearchOpen(false);
     setSearchQuery("");
@@ -1090,6 +1128,11 @@ export default function Library() {
           {libraryNotice}
         </div>
       )}
+      {isProsePaginationLoading && (
+        <div className="library-toast reader-loading-toast" role="status" aria-live="polite">
+          বইটি লোড হচ্ছে…
+        </div>
+      )}
       {frontPageDesign === "classic" ? (
         <section className="classic-shelf" aria-label="বইয়ের তাক">
           <div className="classic-scroll-track">
@@ -1110,13 +1153,15 @@ export default function Library() {
         <section className="readera-library" aria-label="বইয়ের তালিকা">
           <div className="readera-toolbar">
             <button
-              className="readera-icon-button"
-              onClick={() => { setReaderaSearch(""); setReaderaLibraryView("all"); }}
-              aria-label="সব বই দেখান"
+              className="readera-icon-button readera-chat-button"
+              onClick={() => setAssistantOpen(true)}
+              aria-label="বই নিয়ে প্রশ্ন করুন"
             >
-              ☰
+              <svg className="library-chat-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.6 9.6 0 0 1-4.2-1l-4.8 1 1.2-4.3A8.2 8.2 0 0 1 3 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z" />
+                <path d="M8 11.5h.01M12 11.5h.01M16 11.5h.01" />
+              </svg>
             </button>
-            <strong>পাঠাগার</strong>
             <button
               className="readera-icon-button"
               onClick={() => setShowSettings(true)}
@@ -1356,17 +1401,19 @@ export default function Library() {
           </div>
         </section>
       )}
-      <button
-        className="library-chat-launcher"
-        onClick={() => setAssistantOpen(true)}
-        aria-label="বই নিয়ে প্রশ্ন করুন"
-      >
-        <svg className="library-chat-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.6 9.6 0 0 1-4.2-1l-4.8 1 1.2-4.3A8.2 8.2 0 0 1 3 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z" />
-          <path d="M8 11.5h.01M12 11.5h.01M16 11.5h.01" />
-        </svg>
-        <span>জিজ্ঞেস করুন</span>
-      </button>
+      {frontPageDesign !== "readera" && (
+        <button
+          className="library-chat-launcher"
+          onClick={() => setAssistantOpen(true)}
+          aria-label="বই নিয়ে প্রশ্ন করুন"
+        >
+          <svg className="library-chat-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.6 9.6 0 0 1-4.2-1l-4.8 1 1.2-4.3A8.2 8.2 0 0 1 3 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z" />
+            <path d="M8 11.5h.01M12 11.5h.01M16 11.5h.01" />
+          </svg>
+          <span>জিজ্ঞেস করুন</span>
+        </button>
+      )}
       {assistantOpen && (
         <section className="library-assistant" role="dialog" aria-modal="true" aria-label="বই নিয়ে জিজ্ঞেস করুন">
           <div className="library-assistant-panel">
